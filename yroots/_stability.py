@@ -1,7 +1,6 @@
 import numpy as np
 from yroots.polynomial import MultiCheb, MultiPower
 from yroots.OneDimension import multPower, multCheb, divPower, divCheb
-#from yroots.TVBMethod import solve as TVBsolve
 from yroots.polyroots import solve
 from yroots.Division import division
 from yroots.Multiplication import multiplication
