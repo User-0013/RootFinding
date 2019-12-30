@@ -7,7 +7,7 @@ the approximation degree is small enough to be solved efficiently.
 """
 
 import numpy as np
-from numpy.fft.fftpack import fftn
+from numpy.fft import fftn
 from yroots.OneDimension import divCheb,divPower,multCheb,multPower,solve
 from yroots.Division import division
 from yroots.Multiplication import multiplication
