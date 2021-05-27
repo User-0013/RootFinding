@@ -106,7 +106,7 @@ class IntervalData:
         #for keeping track of condition numbers
         self.cond = 0
         self.backcond = 0
-        
+
         #Variables to store for Subintervals
         if isNumber(a):
             return
@@ -180,19 +180,19 @@ class IntervalData:
         elif boundingSize < 0.5: #Something to think about
             self.track_interval_bounded(getBoundingInterval.__name__, [a,b], boundingInterval)
             return [boundingInterval]
-        
+
         #Default to keeping everything
         self.mask.fill(True)
-        
+
         #For getting the subintervals
         temp1 = b - a
-        temp2 = b + a        
-        
+        temp2 = b + a
+
         #Create the new intervals based on the ones we are keeping
         newIntervals = self.subintervals.copy()
         newIntervals[:,:1,:] = (newIntervals[:,:1,:] * temp1 + temp2) / 2
         newIntervals[:,1:,:] = (newIntervals[:,1:,:] * temp1 + temp2) / 2
-        
+
         thrownOuts = []
         if runChecks:
             #Run checks to set mask to False
@@ -205,16 +205,16 @@ class IntervalData:
                     for old_a,old_b in thrownOutIntervals:
                         thrownOuts.append([check.__name__, [old_a,old_b]])
                     self.mask &= ~throwOutMask
-        
+
         if boundingSize < np.sum(self.mask) and boundingSize < 3: #Something to think about
             self.track_interval_bounded(getBoundingInterval.__name__, [a,b], boundingInterval)
             return [boundingInterval]
-        
+
         for params in thrownOuts:
             self.track_interval(*params)
-        
+
         return newIntervals[self.mask]
-    
+
     def check_interval(self, coeff, error, a, b):
         ''' Runs the interval checks on the interval [a,b]
 
@@ -269,7 +269,7 @@ class IntervalData:
         if not self.polishing:
             self.interval_results[name].append(interval)
         self.current_area += np.prod(interval[1] - interval[0]) - np.prod(bounding_interval[1] - bounding_interval[0])
-        
+
     def print_progress(self):
         ''' Prints the progress of subdivision solve. Only prints every 100th time this function is
             called to save time.
@@ -390,18 +390,18 @@ def mergeIntervals(intervals):
     if result[0] > result[1]:
         return [0,0]
     return result
-    
+
 def boundingIntervalWidthAndBoundCheck(interval):
     MIN_WIDTH = .01
     a,b = interval
-    
+
     #Bound a,b by [-1,1]
     a = max(min(a,1),-1)
     b = max(min(b,1),-1)
     #If the interval is now empty, return
     if a == b:
         return [0,0]
-    
+
     #Apply the minnimum width
     width = (b-a)
     if width < MIN_WIDTH:
@@ -412,13 +412,13 @@ def boundingIntervalWidthAndBoundCheck(interval):
         a = max(min(a,1),-1)
         b = max(min(b,1),-1)
     return [a,b]
-    
+
 def getBoundingInterval2D(coeffs, errors):
     P1 = coeffs[0]
     P2 = coeffs[1]
     xIntervals = []
     yIntervals = []
-    
+
     #Get Variables for Calculations
     a1 = P1[1,0]
     b1 = P1[0,1]
@@ -428,7 +428,7 @@ def getBoundingInterval2D(coeffs, errors):
     b2 = P2[0,1]
     c2 = P2[0,0]
     e2 = np.sum(np.abs(P2)) - abs(a2) - abs(b2) - abs(c2) + errors[1]
-    
+
     #Get a basic bound on X from y being in [-1, 1]
     if a1 != 0:
         width = (abs(e1) + abs(b1)) / abs(a1)
@@ -447,7 +447,7 @@ def getBoundingInterval2D(coeffs, errors):
         width = (abs(e2) + abs(a2)) / abs(b2)
         center = -c2/b2
         yIntervals.append([center - width, center + width])
-    
+
     #Get a bound from the parallelogram
     denom = a1*b2 - a2*b1
     if denom != 0:
@@ -457,17 +457,17 @@ def getBoundingInterval2D(coeffs, errors):
         xWidth = (abs(b2*e1) + abs(b1*e2))/abs(denom)
         xIntervals.append([xCenter - xWidth, xCenter + xWidth])
         yIntervals.append([yCenter - yWidth, yCenter + yWidth])
-        
+
     #Merge the intervals and check the bounds and min width
     xInterval = boundingIntervalWidthAndBoundCheck(mergeIntervals(xIntervals))
     yInterval = boundingIntervalWidthAndBoundCheck(mergeIntervals(yIntervals))
-            
+
     return np.array([xInterval, yInterval]).T
 
 def getBoundingIntervalND(test_coeffs,tols):
     dim = len(test_coeffs)
     allIntervals = [[] for i in range(dim)]
-    
+
     #Solve the bounding parallelogram
     #create the linear system
     dim = len(test_coeffs)
@@ -486,7 +486,7 @@ def getBoundingIntervalND(test_coeffs,tols):
     b = np.max(X,axis=1)
     for i in range(dim):
         allIntervals[i].append([a[i], b[i]])
-    
+
     #Get a basic bound on each variable from the others being in [-1, 1]
     for funcNum in range(dim):
         totalError = sum([abs(num) for num in A[funcNum]]) + abs(err[funcNum])
@@ -496,12 +496,37 @@ def getBoundingIntervalND(test_coeffs,tols):
             width = totalError / abs(A[funcNum][var]) - 1
             center = -consts[funcNum]/A[funcNum][var]
             allIntervals[var].append([center - width, center + width])
-    
+
     #Merge the intervals and check the bounds and min width
     for i in range(dim):
         allIntervals[i] = boundingIntervalWidthAndBoundCheck(mergeIntervals(allIntervals[i]))
-        
+
     return np.array(allIntervals).T
+
+def find_transformation2D(coeffs, errs):
+    a1, b1, c1 = P1[1, 0], P1[0, 1], P1[0, 0]
+    e1 = np.sum(np.abs(P1)) - abs(a1) - abs(b1) - abs(c1) + errs[0]
+    a2, b2, c2 = P2[1, 0], P2[0, 1], P2[0, 0]
+    e2 = np.sum(np.abs(P2)) - abs(a2) - abs(b2) - abs(c2) + errs[1]
+     ...:
+    A = np.array([[a1, b1], [a2, b2]])
+    e = np.abs(np.array([e1, e2]))
+    e_pm = np.vstack([e, -e])
+    P = []
+    for c in itertools.product(e_pm.T[0, :], e_pm.T[1, :]):
+        c = np.array(c)
+        b = np.array([-c1, -c2]) + c
+        P.append(la.solve(A, b))
+    P = np.array(P)
+    t = P[0, :]
+    Pt = P - t
+    # Get the component vectors of the paralleogram.
+    for c in itertools.combinations(np.arange(1, 4), 2):
+        if np.any(np.array([np.isclose(row, np.zeros(2)) for row in np.abs(np.sum(Pt[c, :], axis=0) - Pt)])):
+            B = Pt[c, :]
+            break
+    T = la.solve(B.T, 2 * np.identity(2))
+    return T, -T @ t - np.ones(2)
 
 def constant_term_check(test_coeff, tol):
     """One of interval_checks
@@ -526,7 +551,7 @@ def constant_term_check(test_coeff, tol):
         return False
     else:
         return True
-    
+
 def quadratic_check(test_coeff, mask, tol, RAND, subintervals):
     """One of subinterval_checks
 
@@ -781,7 +806,7 @@ def quadratic_check_2D(test_coeff, mask, tol, RAND, subintervals):
     """
     if test_coeff.ndim != 2:
         return mask
-    
+
     #Get the coefficients of the quadratic part
     #Need to account for when certain coefs are zero.
     #Padding is slow, so check the shape instead.
@@ -1001,7 +1026,7 @@ def quadratic_check_3D(test_coeff, mask, tol, RAND, subintervals):
         int_y = np.inf
         int_z = np.inf
 
-        
+
     throwOutMask = mask.copy().reshape(8)
     for i, interval in enumerate(subintervals.reshape(8,2,3)):
         if not throwOutMask[i]:
@@ -1344,7 +1369,7 @@ def quadratic_check_nd(test_coeff, mask, tol, RAND, subintervals):
                 A[j,i] = test_coeff[spot].copy()
                 A[i,j] = A[j,i]
                 #todo: see if we can store this in only one half of A
-               
+
             else:
                 #coeff of pure quadratic terms
                 i = where_nonzero[0]
@@ -1375,7 +1400,7 @@ def quadratic_check_nd(test_coeff, mask, tol, RAND, subintervals):
         if not throwOutMask[k]:
             continue
         throwOutMask[k] = False
-        
+
         Done = False
         min_satisfied, max_satisfied = False,False
         #fix all variables--> corners
