@@ -14,6 +14,7 @@ from matplotlib import patches
 from scipy import linalg as la
 from math import fabs                      # faster than np.abs for small arrays
 from yroots.utils import memoize, transform, get_var_list, isNumber
+from copy import copy
 
 class IntervalData:
     '''
@@ -413,6 +414,44 @@ def boundingIntervalWidthAndBoundCheck(interval):
         b = max(min(b,1),-1)
     return [a,b]
 
+def improveBound(intervals, Ps, consts, errors):
+    """Get a basic bound on x_i from x_j, i != j, being
+    in [-1, 1].
+
+    Parameters
+    ----------
+    intervals : numpy array
+        A list of bounds found for each variable x_i.
+    Ps : numpy array
+        An array of all coefficient arrays for the polynomials
+        in our system of equations for all terms except the constant
+        terms.
+    consts : numpy array
+        An array of all the constant terms of the polynomials in our
+        system of equations.
+    errors : numpy array
+        The the error term approximation errors of the polynomials.
+
+    Returns
+    -------
+    allIntervals : numpy array
+        A list of bounds found for each variable x_i, with each new
+        bound found added.
+    """
+    allIntervals = copy(intervals)
+    dim = len(allIntervals)
+    #Get a basic bound on each variable from the others being in [-1, 1]
+    for funcNum in range(dim):
+        totalError = sum([abs(num) for num in Ps[funcNum]]) + abs(errors[funcNum])
+        for var in range(dim):
+            if abs(Ps[funcNum][var]) == 0:
+                continue
+            width = totalError / abs(Ps[funcNum][var]) - 1
+            center = -consts[funcNum]/Ps[funcNum][var]
+            allIntervals[var].append([center - width, center + width])
+
+    return allIntervals
+
 def getBoundingInterval2D(coeffs, errors):
     P1 = coeffs[0]
     P2 = coeffs[1]
@@ -488,14 +527,7 @@ def getBoundingIntervalND(test_coeffs,tols):
         allIntervals[i].append([a[i], b[i]])
 
     #Get a basic bound on each variable from the others being in [-1, 1]
-    for funcNum in range(dim):
-        totalError = sum([abs(num) for num in A[funcNum]]) + abs(err[funcNum])
-        for var in range(dim):
-            if abs(A[funcNum][var]) == 0:
-                continue
-            width = totalError / abs(A[funcNum][var]) - 1
-            center = -consts[funcNum]/A[funcNum][var]
-            allIntervals[var].append([center - width, center + width])
+    allIntervals = improveBound(allIntervals, A, consts, err)
 
     #Merge the intervals and check the bounds and min width
     for i in range(dim):
@@ -503,12 +535,12 @@ def getBoundingIntervalND(test_coeffs,tols):
 
     return np.array(allIntervals).T
 
-def find_transformation2D(coeffs, errs):
+def find_parallelogram2D(coeffs, errs, zero_tol=1e-10):
+    P1, P2 = coeffs
     a1, b1, c1 = P1[1, 0], P1[0, 1], P1[0, 0]
     e1 = np.sum(np.abs(P1)) - abs(a1) - abs(b1) - abs(c1) + errs[0]
     a2, b2, c2 = P2[1, 0], P2[0, 1], P2[0, 0]
     e2 = np.sum(np.abs(P2)) - abs(a2) - abs(b2) - abs(c2) + errs[1]
-     ...:
     A = np.array([[a1, b1], [a2, b2]])
     e = np.abs(np.array([e1, e2]))
     e_pm = np.vstack([e, -e])
@@ -518,15 +550,14 @@ def find_transformation2D(coeffs, errs):
         b = np.array([-c1, -c2]) + c
         P.append(la.solve(A, b))
     P = np.array(P)
-    t = P[0, :]
+    t = np.sum(P, axis=0) / 4
     Pt = P - t
-    # Get the component vectors of the paralleogram.
-    for c in itertools.combinations(np.arange(1, 4), 2):
-        if np.any(np.array([np.isclose(row, np.zeros(2)) for row in np.abs(np.sum(Pt[c, :], axis=0) - Pt)])):
-            B = Pt[c, :]
-            break
-    T = la.solve(B.T, 2 * np.identity(2))
-    return T, -T @ t - np.ones(2)
+    # Get the component vectors of the parallelogram.
+    U, s, Vh = la.svd(Pt)
+    SV = U.T @ Pt
+    SV[np.abs(SV) < zero_tol] = 0.
+    indep_row_mask = ~(np.sum(SV, axis=1) == 0.)
+    return P[indep_row_mask], t
 
 def constant_term_check(test_coeff, tol):
     """One of interval_checks

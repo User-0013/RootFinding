@@ -1257,6 +1257,62 @@ def transform(x, a, b):
     """
     return ((b-a)*x+(b+a))/2
 
+@jit(nopython=True)
+def transform_parallelogram(x, P, t):
+    """Transforms points in the interval [-1, 1] to the parallelogram defined
+    by the component vectors in P.
+
+    Parameters
+    ----------
+    x : numpy array
+        The points to be transformed.
+    P : numpy array
+        The component vectors that define a parallelogram. Each column
+        is a component vector.
+    t : numpy array
+        The affine part of the transformation. Shifts the parallelogram centered
+        at the origin to the correct interval.
+
+    Returns
+    -------
+    transform : numpy array
+        The transformed points.
+    """
+    return (P @ x.T).T / 2 + t
+
+def find_parallelogram_unique_corners(P, dim, zero_tol=1e-14):
+    """Given the corners of a parallelogram centered at the origin, find
+    the unique corner vectors, i.e., those that don't have a corresponding
+    negative.
+
+    Parameters
+    ----------
+    P : numpy array
+        The points that define the corners of the parallelogram centered
+        at the origin.
+    dim : int
+        The dimension the parallelogram lives in.
+    zero_tol : float
+        The cut off tolerance for what we consider 0.
+
+    Returns
+    -------
+    corners : numpy array
+        The unique corner vectors that are linearly independent.
+    """
+    i, j = 0, np.inf
+    l = []
+    while i < dim:
+        if i == j:
+            i += 1
+        corner = P[i]
+        l.append(corner)
+        # Find the negative of corner.
+        zero_mask = np.abs(P + corner) < zero_tol
+        j = np.where(np.sum(zero_mask, axis=1) == dim)[0]
+        i += 1
+    return np.array(l)
+
 def newton_polish(polys,root,niter=100,tol=1e-5):
     """
     Perform Newton's method on a system of N polynomials in M variables.
@@ -1399,7 +1455,7 @@ class Tolerances:
             if hasattr(self.__dict__[name], '__iter__'):
                 tolDict[name] = self.__dict__[name]
         return tolDict
-        
+
     def nextTols(self):
         """Determines the next tolerances
 

@@ -1,8 +1,7 @@
 import numpy as np
-from yroots.IntervalChecks import constant_term_check, quadratic_check
+from yroots.IntervalChecks import constant_term_check, quadratic_check, IntervalData
 from yroots.old_code.OldIntervalChecks import full_quad_check, full_cubic_check, curvature_check, linear_check
 from yroots.polynomial import MultiCheb,MultiPower
-from yroots.subdivision import get_subintervals
 import itertools
 from scipy import linalg as la
 
@@ -13,7 +12,8 @@ def base_quadratic_check(test_coeff,tol):
     #get the dimension and make sure the coeff tensor has all the right
     # quadratic coeff spots, set to zero if necessary
     dim = test_coeff.ndim
-    intervals = get_subintervals(-np.ones(dim),np.ones(dim),np.arange(dim),None,None,tol)
+    interval_data = IntervalData(-np.ones(dim), np.ones(dim))
+    intervals = interval_data.get_subintervals(interval_data.a, interval_data.b, [], tol, False)
     padding = [(0,max(0,3-i)) for i in test_coeff.shape]
     test_coeff = np.pad(test_coeff.copy(), padding, mode='constant')
 
@@ -160,15 +160,16 @@ def test_quadratic_check():
     for dim in deg_dim.keys():
         print(dim)
         deg = deg_dim[dim]
-        subintervals = get_subintervals(-np.ones(dim),np.ones(dim),np.arange(dim),None,None,tol)
-        _quadratic_check = lambda c, tol: quadratic_check(c,subintervals,tol)
+        interval_data = IntervalData(-np.ones(dim), np.ones(dim))
+        subintervals = interval_data.get_subintervals(interval_data.a, interval_data.b, [], tol, False)
+        _quadratic_check = lambda c, tol: quadratic_check(c, interval_data.mask, tol, interval_data.RAND, subintervals)
         np.random.seed(42)
         rand_test_cases = np.random.rand(*[tests_per_batch]+[deg]*dim)*2-1
         randn_test_cases = np.random.randn(*[tests_per_batch]+[deg]*dim)
         for c in rand_test_cases:
-            assert base_quadratic_check(c,tol) == _quadratic_check(c,tol)
+            assert base_quadratic_check(c,tol) == list(_quadratic_check(c,tol))
         for c in randn_test_cases:
-            assert base_quadratic_check(c,tol) == _quadratic_check(c,tol)
+            assert base_quadratic_check(c,tol) == list(_quadratic_check(c,tol))
 
 def test_quadratic_check3D():
     #test 1
